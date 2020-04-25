@@ -14,13 +14,13 @@
 
 #include "macro_hack.hpp"
 
-int create_socket(const char *ip, int port) {
+int create_socket(int port) {
     int s;
     struct sockaddr_in addr;
 
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = inet_addr(ip);
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     s = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -172,8 +172,8 @@ void pty(SSL *ssl, int client_fd) {
 }
 
 int main(int argc, char **argv) {
-    if (argc <= 2) {
-        fprintf(stderr, "Try: ./server [ip] [port]");
+    if (argc <= 1) {
+        fprintf(stderr, "Try: ./server [port]");
         exit(1);
     }
 
@@ -183,7 +183,7 @@ int main(int argc, char **argv) {
     ctx = create_context();
     configure_context(ctx);
 
-    sock = create_socket(argv[1], atoi(argv[2]));
+    sock = create_socket(atoi(argv[1]));
     char buf[4096];
     /* Handle connections */
     while (1) {
