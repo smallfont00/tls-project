@@ -4,6 +4,7 @@
 #include <netinet/in.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -123,9 +124,21 @@ void resetTermios(void) {
     tcsetattr(0, TCSANOW, &old);
 }
 
+static int sock = -1;
+static SSL_CTX *ctx = NULL;
+
+void signal_callback_handler(int signum) {
+    printf("\nClient is closing\n");
+    if (sock >= 0) close(sock);
+    if (ctx) SSL_CTX_free(ctx);
+    cleanup_openssl();
+    resetTermios();
+    printf("bye~\n");
+    exit(1);
+}
+
 int main(int argc, char **argv) {
-    int sock;
-    SSL_CTX *ctx;
+    signal(SIGINT, signal_callback_handler);
 
     init_openssl();
 
@@ -202,9 +215,7 @@ int main(int argc, char **argv) {
         printf("end\n");
 
         int result = SSL_shutdown(ssl);
-        printf("%d\n", result);
         result = SSL_shutdown(ssl);
-        printf("%d\n", result);
         SSL_free(ssl);
         close(sock);
         break;

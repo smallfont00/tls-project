@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -171,29 +172,46 @@ void pty(SSL *ssl, int client_fd) {
     }
 }
 
+static int sock = -1, client = -1;
+static SSL_CTX *ctx = NULL;
+
+void signal_callback_handler(int signum) {
+    printf("\nServer is closing\n");
+    if (client >= 0) close(client);
+    if (sock >= 0) close(sock);
+    if (ctx) SSL_CTX_free(ctx);
+    cleanup_openssl();
+    printf("bye~\n");
+    exit(1);
+}
+
 int main(int argc, char **argv) {
     if (argc <= 1) {
         fprintf(stderr, "Try: ./server [port]");
         exit(1);
     }
+    signal(SIGINT, signal_callback_handler);
 
-    int sock;
-    SSL_CTX *ctx;
     init_openssl();
+
     ctx = create_context();
+
     configure_context(ctx);
 
     sock = create_socket(atoi(argv[1]));
+
     char buf[4096];
+
     /* Handle connections */
     while (1) {
         struct sockaddr_in addr;
         uint len = sizeof(addr);
-        SSL *ssl;
 
-        printf("connected..\n");
+        printf("connecting..\n");
 
-        DEFINE_EC(client, accept(sock, (struct sockaddr *)&addr, &len), < 0, exit(1));
+        ASSIGN_EC(client, accept(sock, (struct sockaddr *)&addr, &len), < 0, exit(1));
+
+        SSL *ssl = NULL;
 
         ssl = SSL_new(ctx);
 
