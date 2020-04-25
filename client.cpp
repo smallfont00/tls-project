@@ -35,7 +35,7 @@ int create_socket(const char *addr, const char *port) {
 
     if ((rv = getaddrinfo(addr, port, &hints, &servinfo)) != 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-        return 1;
+        exit(1);
     }
 
     for (p = servinfo; p != NULL; p = p->ai_next) {
@@ -56,7 +56,7 @@ int create_socket(const char *addr, const char *port) {
 
     if (p == NULL) {
         fprintf(stderr, "client: failed to connect\n");
-        return 2;
+        exit(1);
     }
 
     inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof s);
@@ -132,7 +132,13 @@ int main(int argc, char **argv) {
     ctx = create_context();
 
     configure_context(ctx);
-    sock = create_socket("127.0.0.1", "4433");
+
+    if (argc <= 2) {
+        fprintf(stderr, "Try: ./client [ip] [port]\n");
+        exit(1);
+    }
+
+    sock = create_socket(argv[1], argv[2]);
 
     /* Handle connections */
     while (1) {
@@ -166,6 +172,7 @@ int main(int argc, char **argv) {
         char buf[4096] = {0};
 
         initTermios(0);
+
         while (true) {
             FD_ZERO(&fd_in);
             FD_SET(STDIN_FILENO, &fd_in);
@@ -180,10 +187,10 @@ int main(int argc, char **argv) {
                 default: {
                     if (FD_ISSET(STDIN_FILENO, &fd_in)) {
                         int len = read(STDIN_FILENO, buf, sizeof(buf));
-                        DEFINE_EC(rev_len, SSL_write(ssl, buf, len), <= 0, return 0);
+                        DEFINE_EC(rev_len, SSL_write(ssl, buf, len), <= 0, resetTermios(); return 0);
                     }
                     if (FD_ISSET(sock, &fd_in)) {
-                        DEFINE_EC(rev_len, SSL_read(ssl, buf, sizeof(buf)), <= 0, return 0);
+                        DEFINE_EC(rev_len, SSL_read(ssl, buf, sizeof(buf)), <= 0, resetTermios(); return 0);
                         write(1, buf, rev_len);
                     }
                 }
