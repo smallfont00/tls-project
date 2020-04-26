@@ -77,9 +77,9 @@ SSL_CTX *create_context() {
 void configure_context(SSL_CTX *ctx) {
     ERR_CHECK(SSL_CTX_load_verify_locations(ctx, "CA_key/CA.crt", NULL), == 0, exit(1));
 
-    ERR_CHECK(SSL_CTX_use_certificate_file(ctx, "test/host.crt", SSL_FILETYPE_PEM), <= 0, exit(1));
+    ERR_CHECK(SSL_CTX_use_certificate_file(ctx, "client_key/client.crt", SSL_FILETYPE_PEM), <= 0, exit(1));
 
-    ERR_CHECK(SSL_CTX_use_PrivateKey_file(ctx, "test/host.key", SSL_FILETYPE_PEM), <= 0, exit(1));
+    ERR_CHECK(SSL_CTX_use_PrivateKey_file(ctx, "client_key/client.key", SSL_FILETYPE_PEM), <= 0, exit(1));
 
     SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
 }
@@ -149,6 +149,7 @@ int main(int argc, char **argv) {
         char commonName[512];
 
         X509_NAME *name = X509_get_subject_name(peerCertificate);
+
         X509_NAME_get_text_by_NID(name, NID_commonName, commonName, 512);
 
         printf("Hostname: %s\n", commonName);
@@ -157,7 +158,6 @@ int main(int argc, char **argv) {
 
         fd_set fd_in;
 
-        printf("sock: %d\n", sock);
         char buf[4096] = {0};
 
         initTermios(0);

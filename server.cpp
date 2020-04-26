@@ -51,19 +51,23 @@ SSL_CTX *create_context() {
 void configure_context(SSL_CTX *ctx) {
     SSL_CTX_set_ecdh_auto(ctx, 1);
 
-    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT | SSL_VERIFY_CLIENT_ONCE, NULL);
 
-    SSL_CTX_set_verify(ctx, SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
+    //DEFINE_EC(CA_cert, SSL_load_client_CA_file("CA_key/CA.crt"), == NULL, exit(1));
 
-    SSL_CTX_set_verify(ctx, SSL_VERIFY_CLIENT_ONCE, NULL);
-
-    SSL_CTX_set_client_CA_list(ctx, SSL_load_client_CA_file("CA_key/CA.crt"));
+    //SSL_CTX_set_client_CA_list(ctx, CA_cert);
 
     ERR_CHECK(SSL_CTX_load_verify_locations(ctx, "CA_key/CA.crt", NULL), == 0, exit(1));
+
+    ERR_CHECK(SSL_CTX_use_certificate_chain_file(ctx, "CA_key/CA.crt"), <= 0, exit(1));
+
+    SSL_CTX_set_verify_depth(ctx, 1);
 
     ERR_CHECK(SSL_CTX_use_certificate_file(ctx, "server_key/server.crt", SSL_FILETYPE_PEM), <= 0, exit(1));
 
     ERR_CHECK(SSL_CTX_use_PrivateKey_file(ctx, "server_key/server.key", SSL_FILETYPE_PEM), <= 0, exit(1));
+
+    ERR_CHECK(SSL_CTX_check_private_key(ctx), == 0, exit(1));
 }
 
 void pty_child(int pty_slave) {
@@ -185,6 +189,18 @@ int main(int argc, char **argv) {
         printf("waiting..\n");
 
         DEFINE_EC(status, SSL_accept(ssl), != 1, continue);
+
+        DEFINE_EC(peerCertificate, SSL_get_peer_certificate(ssl), == NULL, exit(1));
+
+        char commonName[512];
+
+        X509_NAME *name = X509_get_subject_name(peerCertificate);
+
+        X509_NAME_get_text_by_NID(name, NID_commonName, commonName, 512);
+
+        printf("Hostname: %s\n", commonName);
+
+        printf("Connected with %s encryption\n", SSL_get_cipher(ssl));
 
         printf("accepted, pty start..\n");
 
