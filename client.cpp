@@ -27,30 +27,19 @@ int create_socket(const char *addr, const char *port) {
     int sockfd, numbytes;
     char buf[4096];
     struct addrinfo hints, *servinfo, *p;
-    int rv;
+
     char s[INET6_ADDRSTRLEN];
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
-    if ((rv = getaddrinfo(addr, port, &hints, &servinfo)) != 0) {
-        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-        exit(1);
-    }
+    DEFINE_EC(rv, getaddrinfo(addr, port, &hints, &servinfo), != 0, exit(1));
 
     for (p = servinfo; p != NULL; p = p->ai_next) {
-        if ((sockfd = socket(p->ai_family, p->ai_socktype,
-                             p->ai_protocol)) == -1) {
-            perror("client: socket");
-            continue;
-        }
+        ASSIGN_EC(sockfd, socket(p->ai_family, p->ai_socktype, p->ai_protocol), == -1, continue);
 
-        if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
-            close(sockfd);
-            perror("client: connect");
-            continue;
-        }
+        ERR_CHECK(connect(sockfd, p->ai_addr, p->ai_addrlen), == -1, close(sockfd); continue;);
 
         break;
     }
@@ -78,27 +67,20 @@ void cleanup_openssl() {
 }
 
 SSL_CTX *create_context() {
-    const SSL_METHOD *method;
-    SSL_CTX *ctx;
-
-    method = TLSv1_2_client_method();
-    //method = SSLv23_client_method();
-
-    ctx = SSL_CTX_new(method);
-    if (!ctx) {
-        perror("Unable to create SSL context");
-        ERR_print_errors_fp(stderr);
-        exit(EXIT_FAILURE);
-    }
+    const SSL_METHOD *method = TLS_client_method();
+    //const SSL_METHOD *method = SSLv23_client_method();
+    DEFINE_EC(ctx, SSL_CTX_new(method), == NULL, exit(1));
 
     return ctx;
 }
 
 void configure_context(SSL_CTX *ctx) {
-    if (!SSL_CTX_load_verify_locations(ctx, "test/cert.pem", NULL)) {
-        ERR_print_errors_fp(stderr);
-        exit(EXIT_FAILURE);
-    }
+    ERR_CHECK(SSL_CTX_load_verify_locations(ctx, "CA_key/CA.crt", NULL), == 0, exit(1));
+
+    ERR_CHECK(SSL_CTX_use_certificate_file(ctx, "test/host.crt", SSL_FILETYPE_PEM), <= 0, exit(1));
+
+    ERR_CHECK(SSL_CTX_use_PrivateKey_file(ctx, "test/host.key", SSL_FILETYPE_PEM), <= 0, exit(1));
+
     SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
 }
 
@@ -152,26 +134,20 @@ int main(int argc, char **argv) {
     }
 
     sock = create_socket(argv[1], argv[2]);
-
+    printf("sock: %d\n", sock);
     /* Handle connections */
-    while (1) {
-        SSL *ssl;
-        ssl = SSL_new(ctx);
+    while (true) {
+        SSL *ssl = SSL_new(ctx);
         SSL_set_fd(ssl, sock);
 
-        TEMP_EC(SSL_get_verify_result(ssl), != X509_V_OK, exit(1));
+        ERR_CHECK(SSL_get_verify_result(ssl), != X509_V_OK, exit(1));
 
-        TEMP_EC(SSL_connect(ssl), != 1, exit(1));
+        ERR_CHECK(SSL_connect(ssl), != 1, exit(1));
 
-        X509 *peerCertificate = SSL_get_peer_certificate(ssl);
-
-        if (peerCertificate == NULL) {
-            printf("No certificate information！\n");
-            ERR_print_errors_fp(stderr);
-            exit(EXIT_FAILURE);
-        }
+        DEFINE_EC(peerCertificate, SSL_get_peer_certificate(ssl), == NULL, exit(1));
 
         char commonName[512];
+
         X509_NAME *name = X509_get_subject_name(peerCertificate);
         X509_NAME_get_text_by_NID(name, NID_commonName, commonName, 512);
 
@@ -207,7 +183,7 @@ int main(int argc, char **argv) {
                         write(1, buf, rev_len);
                     }
                 }
-            }  // End switch
+            }
         }
 
         resetTermios();

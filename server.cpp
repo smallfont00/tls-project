@@ -16,29 +16,17 @@
 #include "macro_hack.hpp"
 
 int create_socket(int port) {
-    int s;
     struct sockaddr_in addr;
 
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    s = socket(AF_INET, SOCK_STREAM, 0);
+    DEFINE_EC(s, socket(AF_INET, SOCK_STREAM, 0), < 0, exit(1));
 
-    if (s < 0) {
-        fprintf(stderr, "Unable to create socket\n");
-        exit(EXIT_FAILURE);
-    }
+    ERR_CHECK(bind(s, (struct sockaddr *)&addr, sizeof(addr)), < 0, exit(1));
 
-    if (bind(s, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        fprintf(stderr, "Unable to bind\n");
-        exit(EXIT_FAILURE);
-    }
-
-    if (listen(s, 1) < 0) {
-        fprintf(stderr, "Unable to listen\n");
-        exit(EXIT_FAILURE);
-    }
+    ERR_CHECK(listen(s, 1), < 0, exit(1));
 
     return s;
 }
@@ -53,18 +41,9 @@ void cleanup_openssl() {
 }
 
 SSL_CTX *create_context() {
-    const SSL_METHOD *method;
-    SSL_CTX *ctx;
-
-    method = TLSv1_2_server_method();
-    //method = SSLv23_server_method();
-
-    ctx = SSL_CTX_new(method);
-    if (!ctx) {
-        fprintf(stderr, "Unable to create SSL context\n");
-        ERR_print_errors_fp(stderr);
-        exit(EXIT_FAILURE);
-    }
+    const SSL_METHOD *method = TLS_server_method();
+    //const SSL_METHOD *method = SSLv23_server_method();
+    DEFINE_EC(ctx, SSL_CTX_new(method), == NULL, exit(1));
 
     return ctx;
 }
@@ -72,36 +51,26 @@ SSL_CTX *create_context() {
 void configure_context(SSL_CTX *ctx) {
     SSL_CTX_set_ecdh_auto(ctx, 1);
 
-    /* Set the key and cert */
-    if (SSL_CTX_use_certificate_file(ctx, "test/host.crt", SSL_FILETYPE_PEM) <= 0) {
-        ERR_print_errors_fp(stderr);
-        exit(EXIT_FAILURE);
-    }
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
 
-    if (SSL_CTX_use_PrivateKey_file(ctx, "test/host.key", SSL_FILETYPE_PEM) <= 0) {
-        ERR_print_errors_fp(stderr);
-        exit(EXIT_FAILURE);
-    }
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
+
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_CLIENT_ONCE, NULL);
+
+    SSL_CTX_set_client_CA_list(ctx, SSL_load_client_CA_file("CA_key/CA.crt"));
+
+    ERR_CHECK(SSL_CTX_load_verify_locations(ctx, "CA_key/CA.crt", NULL), == 0, exit(1));
+
+    ERR_CHECK(SSL_CTX_use_certificate_file(ctx, "server_key/server.crt", SSL_FILETYPE_PEM), <= 0, exit(1));
+
+    ERR_CHECK(SSL_CTX_use_PrivateKey_file(ctx, "server_key/server.key", SSL_FILETYPE_PEM), <= 0, exit(1));
 }
 
 void pty_child(int pty_slave) {
-    struct termios slave_orig_term_settings;  // Saved terminal settings
-    struct termios new_term_settings;         // Current terminal settings
-
-    // Save the defaults parameters of the slave side of the PTY
-    tcgetattr(pty_slave, &slave_orig_term_settings);
-
-    // Set RAW mode on slave side of PTY
-    //new_term_settings = slave_orig_term_settings;
-    //cfmakeraw(&new_term_settings);
-    //tcsetattr(pty_slave, TCSANOW, &new_term_settings);
-
-    // The slave side of the PTY becomes the standard input and outputs of the child process
     dup2(pty_slave, 0);
     dup2(pty_slave, 1);
     dup2(pty_slave, 2);
 
-    // Now the original file descriptor is useless
     close(pty_slave);
 
     // Make the current process a new session leader
@@ -111,7 +80,6 @@ void pty_child(int pty_slave) {
     // (Mandatory for programs like the shell to make them manage correctly their outputs)
     ioctl(0, TIOCSCTTY, 1);
 
-    //printf("bash start\n");
     DEFINE_EC(status, execl("/bin/bash", "/bin/bash", NULL), < 0, exit(1));
 }
 
@@ -145,8 +113,8 @@ void pty_parent(int pty_master, SSL *ssl, int client_fd) {
                     SSL_write(ssl, buf, rev_len);
                 }
             }
-        }  // End switch
-    }      // End while
+        }
+    }
 }
 
 void pty(SSL *ssl, int client_fd) {
@@ -203,7 +171,7 @@ int main(int argc, char **argv) {
     char buf[4096];
 
     /* Handle connections */
-    while (1) {
+    while (true) {
         struct sockaddr_in addr;
         uint len = sizeof(addr);
 
@@ -211,17 +179,14 @@ int main(int argc, char **argv) {
 
         ASSIGN_EC(client, accept(sock, (struct sockaddr *)&addr, &len), < 0, exit(1));
 
-        SSL *ssl = NULL;
-
-        ssl = SSL_new(ctx);
-
+        SSL *ssl = SSL_new(ctx);
         SSL_set_fd(ssl, client);
 
         printf("waiting..\n");
 
-        DEFINE_EC(status, SSL_accept(ssl), < 0, continue);
+        DEFINE_EC(status, SSL_accept(ssl), != 1, continue);
 
-        printf("accepted\n");
+        printf("accepted, pty start..\n");
 
         pty(ssl, client);
 
