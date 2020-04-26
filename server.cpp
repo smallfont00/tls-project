@@ -159,7 +159,7 @@ void signal_callback_handler(int signum) {
 
 int main(int argc, char **argv) {
     if (argc <= 1) {
-        fprintf(stderr, "Try: ./server [port]");
+        fprintf(stderr, "Try: ./server [port]\n");
         exit(1);
     }
     signal(SIGINT, signal_callback_handler);
