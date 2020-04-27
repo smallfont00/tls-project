@@ -59,9 +59,9 @@ void configure_context(SSL_CTX *ctx) {
 
     ERR_CHECK(SSL_CTX_load_verify_locations(ctx, "CA_key/CA.crt", NULL), == 0, exit(1));
 
-    ERR_CHECK(SSL_CTX_use_certificate_chain_file(ctx, "CA_key/CA.crt"), <= 0, exit(1));
+    //ERR_CHECK(SSL_CTX_use_certificate_chain_file(ctx, "CA_key/CA.crt"), <= 0, exit(1));
 
-    SSL_CTX_set_verify_depth(ctx, 1);
+    //SSL_CTX_set_verify_depth(ctx, 1);
 
     ERR_CHECK(SSL_CTX_use_certificate_file(ctx, "server_key/server.crt", SSL_FILETYPE_PEM), <= 0, exit(1));
 
@@ -74,6 +74,12 @@ void pty_child(int pty_slave) {
     dup2(pty_slave, 0);
     dup2(pty_slave, 1);
     dup2(pty_slave, 2);
+
+    termios old, current;
+
+    tcgetattr(0, &old);
+
+    cfmakeraw(&current);
 
     close(pty_slave);
 
@@ -134,6 +140,7 @@ void pty(SSL *ssl, int client_fd) {
 
     if (pid == 0) {
         printf("slave started\n");
+
         close(pty_master);
         pty_child(pty_slave);
     }
@@ -141,6 +148,7 @@ void pty(SSL *ssl, int client_fd) {
         printf("master started\n");
         close(pty_slave);
         pty_parent(pty_master, ssl, client_fd);
+        kill(pid, SIGKILL);
     }
 }
 

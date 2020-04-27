@@ -129,7 +129,7 @@ int main(int ac, char *av[]) {
         // (Mandatory for programs like the shell to make them manage correctly their outputs)
         ioctl(0, TIOCSCTTY, 1);
 
-        //execl("/bin/bash", "/bin/bash", NULL);
+        execl("/bin/bash", "/bin/bash", NULL);
         // Execution of the program
         {
             char **child_av;

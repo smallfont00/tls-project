@@ -86,23 +86,17 @@ void configure_context(SSL_CTX *ctx) {
 
 static struct termios old, current;
 
-/* Initialize new terminal i/o settings */
-void initTermios(int echo) {
-    tcgetattr(0, &old); /* grab old terminal i/o settings */
+void init_termios() {
+    tcgetattr(0, &old);
 
-    current = old;              /* make new settings same as old settings */
-    current.c_lflag &= ~ICANON; /* disable buffered i/o */
-    if (echo) {
-        current.c_lflag |= ECHO; /* set echo mode */
-    } else {
-        current.c_lflag &= ~ECHO; /* set no echo mode */
-    }
+    current = old;
 
-    tcsetattr(0, TCSANOW, &current); /* use these new terminal i/o settings now */
+    cfmakeraw(&current);
+
+    tcsetattr(0, TCSANOW, &current);
 }
 
-/* Restore old terminal i/o settings */
-void resetTermios(void) {
+void reset_termios(void) {
     tcsetattr(0, TCSANOW, &old);
 }
 
@@ -114,7 +108,7 @@ void signal_callback_handler(int signum) {
     if (sock >= 0) close(sock);
     if (ctx) SSL_CTX_free(ctx);
     cleanup_openssl();
-    resetTermios();
+    reset_termios();
     printf("bye~\n");
     exit(1);
 }
@@ -135,67 +129,65 @@ int main(int argc, char **argv) {
 
     sock = create_socket(argv[1], argv[2]);
     printf("sock: %d\n", sock);
-    /* Handle connections */
+
+    SSL *ssl = SSL_new(ctx);
+
+    SSL_set_fd(ssl, sock);
+
+    ERR_CHECK(SSL_connect(ssl), != 1, exit(1));
+
+    ERR_CHECK(SSL_get_verify_result(ssl), != X509_V_OK, exit(1));
+
+    DEFINE_EC(peerCertificate, SSL_get_peer_certificate(ssl), == NULL, exit(1));
+
+    char commonName[512];
+
+    X509_NAME *name = X509_get_subject_name(peerCertificate);
+
+    X509_NAME_get_text_by_NID(name, NID_commonName, commonName, 512);
+
+    printf("Hostname: %s\n", commonName);
+
+    printf("Connected with %s encryption\n", SSL_get_cipher(ssl));
+
+    fd_set fd_in;
+
+    char buf[4096] = {0};
+
+    init_termios();
+
     while (true) {
-        SSL *ssl = SSL_new(ctx);
-        SSL_set_fd(ssl, sock);
+        FD_ZERO(&fd_in);
+        FD_SET(STDIN_FILENO, &fd_in);
+        FD_SET(sock, &fd_in);
 
-        ERR_CHECK(SSL_get_verify_result(ssl), != X509_V_OK, exit(1));
+        int status = select(sock + 1, &fd_in, NULL, NULL, NULL);
+        switch (status) {
+            case -1:
+                fprintf(stderr, "Error %d on select()\n", errno);
+                return 0;
 
-        ERR_CHECK(SSL_connect(ssl), != 1, exit(1));
-
-        DEFINE_EC(peerCertificate, SSL_get_peer_certificate(ssl), == NULL, exit(1));
-
-        char commonName[512];
-
-        X509_NAME *name = X509_get_subject_name(peerCertificate);
-
-        X509_NAME_get_text_by_NID(name, NID_commonName, commonName, 512);
-
-        printf("Hostname: %s\n", commonName);
-
-        printf("Connected with %s encryption\n", SSL_get_cipher(ssl));
-
-        fd_set fd_in;
-
-        char buf[4096] = {0};
-
-        initTermios(0);
-
-        while (true) {
-            FD_ZERO(&fd_in);
-            FD_SET(STDIN_FILENO, &fd_in);
-            FD_SET(sock, &fd_in);
-
-            int status = select(sock + 1, &fd_in, NULL, NULL, NULL);
-            switch (status) {
-                case -1:
-                    fprintf(stderr, "Error %d on select()\n", errno);
-                    return 0;
-
-                default: {
-                    if (FD_ISSET(STDIN_FILENO, &fd_in)) {
-                        int len = read(STDIN_FILENO, buf, sizeof(buf));
-                        DEFINE_EC(rev_len, SSL_write(ssl, buf, len), <= 0, resetTermios(); return 0);
-                    }
-                    if (FD_ISSET(sock, &fd_in)) {
-                        DEFINE_EC(rev_len, SSL_read(ssl, buf, sizeof(buf)), <= 0, resetTermios(); return 0);
-                        write(1, buf, rev_len);
-                    }
+            default: {
+                if (FD_ISSET(STDIN_FILENO, &fd_in)) {
+                    int len = read(STDIN_FILENO, buf, sizeof(buf));
+                    DEFINE_EC(rev_len, SSL_write(ssl, buf, len), <= 0, reset_termios(); return 0);
+                }
+                if (FD_ISSET(sock, &fd_in)) {
+                    DEFINE_EC(rev_len, SSL_read(ssl, buf, sizeof(buf)), <= 0, reset_termios(); return 0);
+                    write(1, buf, rev_len);
                 }
             }
         }
-
-        resetTermios();
-
-        printf("end\n");
-
-        int result = SSL_shutdown(ssl);
-        result = SSL_shutdown(ssl);
-        SSL_free(ssl);
-        close(sock);
-        break;
     }
+
+    reset_termios();
+
+    printf("end\n");
+
+    int result = SSL_shutdown(ssl);
+    result = SSL_shutdown(ssl);
+    SSL_free(ssl);
+    close(sock);
 
     SSL_CTX_free(ctx);
     cleanup_openssl();
