@@ -1,0 +1,2 @@
+clang++-9 -std=c++17 -O3 https_server.cpp -o https_server -lssl -lcrypto -lstdc++fs
+clang++-9 -std=c++17 -O3 server.cpp -o server -lssl -lcrypto -lstdc++fs

@@ -1,19 +1,5 @@
-#include <arpa/inet.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <openssl/err.h>
-#include <openssl/ssl.h>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/ioctl.h>
-#include <sys/select.h>
-#include <sys/socket.h>
-#include <termios.h>
-#include <unistd.h>
-
-#include "macro_hack.hpp"
+#include "middleware/static.hpp"
+#include "utils/linux_dependency.hpp"
 
 int create_socket(int port) {
     struct sockaddr_in addr;
@@ -51,7 +37,7 @@ SSL_CTX *create_context() {
 void configure_context(SSL_CTX *ctx) {
     SSL_CTX_set_ecdh_auto(ctx, 1);
 
-    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT | SSL_VERIFY_CLIENT_ONCE, NULL);
+    //SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT | SSL_VERIFY_CLIENT_ONCE, NULL);
 
     //DEFINE_EC(CA_cert, SSL_load_client_CA_file("CA_key/CA.crt"), == NULL, exit(1));
 
@@ -67,7 +53,7 @@ void configure_context(SSL_CTX *ctx) {
 
     ERR_CHECK(SSL_CTX_use_PrivateKey_file(ctx, "server_key/server.key", SSL_FILETYPE_PEM), <= 0, exit(1));
 
-    ERR_CHECK(SSL_CTX_check_private_key(ctx), == 0, exit(1));
+    //ERR_CHECK(SSL_CTX_check_private_key(ctx), == 0, exit(1));
 }
 
 void pty_child(int pty_slave) {
@@ -104,7 +90,7 @@ void pty_parent(int pty_master, SSL *ssl, int client_fd) {
         FD_SET(pty_master, &fd_in);
         FD_SET(client_fd, &fd_in);
 
-        int status = select(max(client_fd, pty_master) + 1, &fd_in, NULL, NULL, NULL);
+        int status = select(std::max(client_fd, pty_master) + 1, &fd_in, NULL, NULL, NULL);
 
         switch (status) {
             case -1:
@@ -115,6 +101,7 @@ void pty_parent(int pty_master, SSL *ssl, int client_fd) {
                 if (FD_ISSET(client_fd, &fd_in)) {
                     printf("Recv..\n");
                     DEFINE_EC(rev_len, SSL_read(ssl, buf, sizeof(buf)), <= 0, return );
+
                     write(pty_master, buf, rev_len);
                 }
                 if (FD_ISSET(pty_master, &fd_in)) {
@@ -198,19 +185,19 @@ int main(int argc, char **argv) {
 
         DEFINE_EC(status, SSL_accept(ssl), != 1, continue);
 
-        DEFINE_EC(peerCertificate, SSL_get_peer_certificate(ssl), == NULL, exit(1));
+        // DEFINE_EC(peerCertificate, SSL_get_peer_certificate(ssl), == NULL, exit(1));
 
-        char commonName[512];
+        // char commonName[512];
 
-        X509_NAME *name = X509_get_subject_name(peerCertificate);
+        // X509_NAME *name = X509_get_subject_name(peerCertificate);
 
-        X509_NAME_get_text_by_NID(name, NID_commonName, commonName, 512);
+        // X509_NAME_get_text_by_NID(name, NID_commonName, commonName, 512);
 
-        printf("Hostname: %s\n", commonName);
+        // printf("Hostname: %s\n", commonName);
 
-        printf("Connected with %s encryption\n", SSL_get_cipher(ssl));
+        // printf("Connected with %s encryption\n", SSL_get_cipher(ssl));
 
-        printf("accepted, pty start..\n");
+        // printf("accepted, pty start..\n");
 
         pty(ssl, client);
 

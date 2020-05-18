@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Hello, world!</title>
+</head>
+
+<body>
+    <p>Leave a message</p>
+    <form action="upload.cgi" method="POST">
+        <label for="title">Title</label>
+        <input type="type" id="title" name="title"><br><br>
+        <label for="text">Text</label>
+        <input type="text" id="text" name="text"><br><br>
+        <input type="submit" value="Sumbit">
+    </form>
+    <p>View message by title</p>
+    <form action="view.cgi" method="GET">
+        <label for="title">Title</label>
+        <input type="type" id="title" name="title"><br><br>
+        <input type="submit" value="Sumbit">
+    </form>
+    <img src="apple.jpg" alt="An apple">
+</body>
+
+</html>
