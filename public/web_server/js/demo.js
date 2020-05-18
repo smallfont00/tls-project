@@ -4,32 +4,40 @@ var term = new Terminal();
 
 term.open(document.getElementById('terminal'));
 
-var xhr = new XMLHttpRequest();
-xhr.open("POST", '/api/v1/pty', true);
+function XML_Send(path, data) {
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", path, true);
 
-//Send the proper header information along with the request
-xhr.setRequestHeader("Content-Type", "text/html");
+    //Send the proper header information along with the request
+    xhr.setRequestHeader("Content-Type", "text/html");
 
-xhr.onreadystatechange = function () { // Call a function when the state changes.
-    if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
-        alert(xhr.responseText);
+    xhr.onreadystatechange = function () { // Call a function when the state changes.
+        if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
+            alert(xhr.responseText);
+        }
     }
+    xhr.send(data);
 }
-xhr.send("start");
+
+XML_Send('/api/v1/pty', "start")
+
+var reg = /\[00m\$/
 
 if (!!window.EventSource) {
     var source = new EventSource('/api/v1/pty')
     var ok = false
     source.addEventListener('message', function (e) {
-        console.log(e.data);
-        term.write(e.data);
+        var data = window.atob(e.data)
+        console.log(data);
+        //if (reg.test(data)) {
+        //    console.log('last message');
+        //    data = '\r\n' + data;
+        //}
+        term.write(data);
     }, false)
-
     source.addEventListener('open', function (e) {
         alert("Connected");
-
     }, false)
-
     source.addEventListener('error', function (e) {
         if (e.eventPhase == EventSource.CLOSED)
             source.close()
@@ -40,19 +48,7 @@ if (!!window.EventSource) {
             alert("Connecting...");
         }
     }, false)
-
-    var xhr = new XMLHttpRequest();
-    xhr.open("POST", '/api/v1/pty/write', true);
-
-    //Send the proper header information along with the request
-    xhr.setRequestHeader("Content-Type", "text/html");
-
-    xhr.onreadystatechange = function () { // Call a function when the state changes.
-        if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
-            //alert(xhr.responseText);
-        }
-    }
-    xhr.send("\n");
+    XML_Send('/api/v1/pty/write', '\n')
 } else {
     console.log("Your browser doesn't support SSE")
 }
@@ -65,52 +61,38 @@ function runFakeTerminal() {
 
     term._initialized = true;
 
-    term.prompt = () => {
-        term.write('\r\n$ ');
-    };
-
-    term.writeln('Welcome to xterm.js');
-    term.writeln('This is a local terminal emulation, without a real terminal in the back-end.');
-    term.writeln('Type some keys and commands to play around.');
-    term.writeln('');
-
-
-    prompt(term);
+    // prompt(term);
+    var buffer = ""
 
     term.onData(e => {
-        var xhr = new XMLHttpRequest();
-        xhr.open("POST", '/api/v1/pty/write', true);
-
-        //Send the proper header information along with the request
-        xhr.setRequestHeader("Content-Type", "text/html");
-
-        xhr.onreadystatechange = function () { // Call a function when the state changes.
-            if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
-                //alert(xhr.responseText);
-            }
-        }
-        xhr.send(e);
+        buffer += e;
+        console.log(buffer);
+        XML_Send('/api/v1/pty/write', buffer)
+        buffer = ""
     })
-    /*
-        term.onKey(e => {
-            const printable = !e.domEvent.altKey && !e.domEvent.altGraphKey && !e.domEvent.ctrlKey && !e.domEvent.metaKey;
-    
-    
-            if (e.domEvent.keyCode === 13) {
-                prompt(term);
-            } else if (e.domEvent.keyCode === 8) {
-                // Do not delete the prompt
-                if (term._core.buffer.x > 2) {
-                    term.write('\b \b');
-                }
-            } else if (printable) {
-                term.write(e.key);
-            }
-        });
-    */
+
+
+
+    term.onKey(e => {
+        const printable = !e.domEvent.altKey && !e.domEvent.altGraphKey && !e.domEvent.ctrlKey && !e.domEvent.metaKey;
+
+
+        if (e.domEvent.keyCode === 13) {
+
+            //term.write('\r\n')
+            //XML_Send('/api/v1/pty/write', '\n')
+            //buffer = ""
+            //prompt(term);
+        } else if (e.domEvent.keyCode === 8) {
+            // Do not delete the prompt
+            //term.write('\b \b');
+        } else if (printable) {
+            //term.write(e.key);
+        }
+    });
 }
 
-function prompt(term) {
-    term.write('\r\n$ ');
-}
+// function prompt(term) {
+//     term.write('\r\n$ ');
+// }
 runFakeTerminal();

@@ -1,7 +1,7 @@
 #include "middleware/cgi_handler.hpp"
 #include "middleware/static.hpp"
+#include "utils/base64.hpp"
 #include "web_server.hpp"
-
 map<std::string, std::string> parse_config(std::string filename) {
     char key[128], value[128], temp[256];
     map<std::string, std::string> result;
@@ -76,22 +76,23 @@ int main() {
         res.status(202).send("");
     });
 
-    char buf[4096];
-
     int pty_master = pty();
-    std::cout << "[pty_master]" << pty_master << std::endl;
+    std::cout << "[pty_master socket] " << pty_master << std::endl;
 
     app.Use("/api/v1/pty", [&](Request<> &req, Response &res) {
         Response res_cpy = res;
         app.selector.subscribe(pty_master, [&, res_cpy]() {
+            unsigned char buf[4096] = {0};
             DEFINE_EC(rev_len, read(pty_master, buf, sizeof(buf)), <= 0, return;);
-            string m = buf;
+            auto m = base64_encode(buf, rev_len);
+            std::cout << "[pty >> ] " << buf << std::endl;
             res_cpy.write("data: " + m + "\n\n");
         });
         res.status(200).content_type("text/event-stream").writeHeader();
     });
 
     app.Use("/api/v1/pty/write", [&](Request<> &req, Response &res) {
+        std::cout << "[pty << ] " << req.body() << std::endl;
         write(pty_master, req.body().c_str(), req.body().size());
         res.status(202).send("");
     });

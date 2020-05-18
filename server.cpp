@@ -27,8 +27,8 @@ void cleanup_openssl() {
 }
 
 SSL_CTX *create_context() {
-    const SSL_METHOD *method = TLS_server_method();
-    //const SSL_METHOD *method = SSLv23_server_method();
+    //const SSL_METHOD *method = TLS_server_method();
+    const SSL_METHOD *method = SSLv23_server_method();
     DEFINE_EC(ctx, SSL_CTX_new(method), == NULL, exit(1));
 
     return ctx;
@@ -43,15 +43,15 @@ void configure_context(SSL_CTX *ctx) {
 
     //SSL_CTX_set_client_CA_list(ctx, CA_cert);
 
-    ERR_CHECK(SSL_CTX_load_verify_locations(ctx, "CA_key/CA.crt", NULL), == 0, exit(1));
+    ERR_CHECK(SSL_CTX_load_verify_locations(ctx, "hw3_key/root_cert.pem", NULL), == 0, exit(1));
 
     //ERR_CHECK(SSL_CTX_use_certificate_chain_file(ctx, "CA_key/CA.crt"), <= 0, exit(1));
 
     //SSL_CTX_set_verify_depth(ctx, 1);
 
-    ERR_CHECK(SSL_CTX_use_certificate_file(ctx, "server_key/server.crt", SSL_FILETYPE_PEM), <= 0, exit(1));
+    ERR_CHECK(SSL_CTX_use_certificate_file(ctx, "hw3_key/B10615004.crt", SSL_FILETYPE_PEM), <= 0, exit(1));
 
-    ERR_CHECK(SSL_CTX_use_PrivateKey_file(ctx, "server_key/server.key", SSL_FILETYPE_PEM), <= 0, exit(1));
+    ERR_CHECK(SSL_CTX_use_PrivateKey_file(ctx, "hw3_key/B10615004.key", SSL_FILETYPE_PEM), <= 0, exit(1));
 
     //ERR_CHECK(SSL_CTX_check_private_key(ctx), == 0, exit(1));
 }
