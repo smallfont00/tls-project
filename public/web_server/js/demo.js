@@ -19,20 +19,12 @@ function XML_Send(path, data) {
     xhr.send(data);
 }
 
-XML_Send('/api/v1/pty', "start")
-
-var reg = /\[00m\$/
-
 if (!!window.EventSource) {
     var source = new EventSource('/api/v1/pty')
     var ok = false
     source.addEventListener('message', function (e) {
         var data = window.atob(e.data)
         console.log(data);
-        //if (reg.test(data)) {
-        //    console.log('last message');
-        //    data = '\r\n' + data;
-        //}
         term.write(data);
     }, false)
     source.addEventListener('open', function (e) {
@@ -61,38 +53,11 @@ function runFakeTerminal() {
 
     term._initialized = true;
 
-    // prompt(term);
-    var buffer = ""
-
     term.onData(e => {
-        buffer += e;
-        console.log(buffer);
-        XML_Send('/api/v1/pty/write', buffer)
-        buffer = ""
+        console.log(e);
+        XML_Send('/api/v1/pty/write', e)
     })
 
-
-
-    term.onKey(e => {
-        const printable = !e.domEvent.altKey && !e.domEvent.altGraphKey && !e.domEvent.ctrlKey && !e.domEvent.metaKey;
-
-
-        if (e.domEvent.keyCode === 13) {
-
-            //term.write('\r\n')
-            //XML_Send('/api/v1/pty/write', '\n')
-            //buffer = ""
-            //prompt(term);
-        } else if (e.domEvent.keyCode === 8) {
-            // Do not delete the prompt
-            //term.write('\b \b');
-        } else if (printable) {
-            //term.write(e.key);
-        }
-    });
 }
 
-// function prompt(term) {
-//     term.write('\r\n$ ');
-// }
 runFakeTerminal();

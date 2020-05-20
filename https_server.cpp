@@ -72,21 +72,20 @@ int main() {
 
     app.Use("/api/v1/demo", [&](Request<> &req, Response &res) {
         static bool is_on = 0;
-        std::cout << "demo: " << req.body().size() << " " << req.body() << std::endl;
+        std::cout << "[demo] " << req.body().size() << " " << req.body() << std::endl;
         res.status(202).send("");
     });
 
     int pty_master = pty();
-    std::cout << "[pty_master socket] " << pty_master << std::endl;
+
+    unsigned char buf[4096] = {0};
 
     app.Use("/api/v1/pty", [&](Request<> &req, Response &res) {
-        Response res_cpy = res;
-        app.selector.subscribe(pty_master, [&, res_cpy]() {
-            unsigned char buf[4096] = {0};
-            DEFINE_EC(rev_len, read(pty_master, buf, sizeof(buf)), <= 0, return;);
+        app.selector.subscribe(pty_master, [&, res]() {
+            DEFINE_EC(rev_len, read(pty_master, buf, sizeof(buf)), <= 0, app.selector.unsubscribe(res.fd, res.ssl); return;);
             auto m = base64_encode(buf, rev_len);
-            std::cout << "[pty >> ] " << buf << std::endl;
-            res_cpy.write("data: " + m + "\n\n");
+            std::cout << "[pty >> ] " << m << std::endl;
+            res.write("data: " + m + "\n\n");
         });
         res.status(200).content_type("text/event-stream").writeHeader();
     });
@@ -97,23 +96,6 @@ int main() {
         res.status(202).send("");
     });
 
-    /*
-    app.Use("/api/v1/pty", [&](Request<> &req, Response &res) {
-        res.send();
-        app.selector.subscribe(pty_master, [=]() {
-            res.fd;
-            res.ssl;
-        });
-        static bool is_on = 0;
-        std::cout << "demo: " << req.body().size() << " " << req.body() << std::endl;
-        res.status(200)
-            .send("<p>Good</p>");
-    });
-
-    app.Use("/api/v1/pty/write", [&](Request<> &req, Response &res) {
-        pty[]
-    });
-*/
     app.Listen(cfg["PORT"], []() -> void {
         cout << "Server started" << endl;
     });

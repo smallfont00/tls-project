@@ -71,12 +71,12 @@ class Server {
 
    private:
     void receive_action(int client_socket, SSL *ssl) {
-        DEFINE_EC(status, SSL_accept(ssl), != 1, selector.close_ssl(client_socket, ssl); return;);
+        DEFINE_EC(status, SSL_accept(ssl), != 1, selector.unsubscribe(client_socket, ssl); return;);
 
         auto req = Request<>();
         auto res = Response(client_socket, ssl);
 
-        DEFINE_EC(rev_len, SSL_read(ssl, buf, sizeof(buf)), <= 0, selector.close_ssl(client_socket, ssl); return;);
+        DEFINE_EC(rev_len, SSL_read(ssl, buf, sizeof(buf)), <= 0, selector.unsubscribe(client_socket, ssl); return;);
 
         req.parse(buf, rev_len);
         for (auto &[path, action] : actions) {
@@ -84,9 +84,6 @@ class Server {
                 action(req, res);
             }
         }
-        //SSL_shutdown(ssl);
-        //SSL_free(ssl);
-        //close(client_socket);
     }
 
     int create_socket(int port) {

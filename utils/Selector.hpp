@@ -17,7 +17,7 @@ class Selector {
         close(fd);
         fileno.erase(fd);
     }
-    void close_ssl(int fd, SSL *ssl) {
+    void unsubscribe(int fd, SSL *ssl) {
         SSL_shutdown(ssl);
         SSL_free(ssl);
         close(fd);
